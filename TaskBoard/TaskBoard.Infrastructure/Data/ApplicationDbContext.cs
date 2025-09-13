@@ -6,51 +6,89 @@ namespace TaskBoard.Infrastructure.Data;
 public class ApplicationDbContext : DbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-        : base(options) { }
-
-    public DbSet<User> Users => Set<User>();
-    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
-    public DbSet<Project> Projects => Set<Project>();
-    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
-    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
-    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
-    public DbSet<Tag> Tags => Set<Tag>();
-    public DbSet<TaskTag> TaskTags => Set<TaskTag>();
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+        : base(options)
     {
-        base.OnModelCreating(modelBuilder);
+    }
 
-        // User <-> UserProfile (1:1)
-        modelBuilder.Entity<User>()
+    //  DbSets
+    public DbSet<User> Users { get; set; } = default!;
+    public DbSet<UserProfile> UserProfiles { get; set; } = default!;
+    public DbSet<Project> Projects { get; set; } = default!;
+    public DbSet<ProjectMember> ProjectMembers { get; set; } = default!;
+    public DbSet<TaskItem> Tasks { get; set; } = default!;
+    public DbSet<TaskAssignment> TaskAssignments { get; set; } = default!;
+    public DbSet<Tag> Tags { get; set; } = default!;
+    public DbSet<TaskTag> TaskTags { get; set; } = default!;
+    public DbSet<Role> Roles { get; set; } = default!;
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        // User  Profile (1:1)
+        builder.Entity<User>()
             .HasOne(u => u.Profile)
             .WithOne(p => p.User)
             .HasForeignKey<UserProfile>(p => p.UserId);
 
-        // Project <-> Owner (1:N)
-        modelBuilder.Entity<Project>()
-            .HasOne(p => p.Owner)
-            .WithMany(u => u.OwnedProjects)
-            .HasForeignKey(p => p.OwnerId);
+        // User  Role (1:N)
+        builder.Entity<User>()
+            .HasOne(u => u.Role)
+            .WithMany(r => r.Users)
+            .HasForeignKey(u => u.RoleId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // ProjectMember (M:N User <-> Project)
-        modelBuilder.Entity<ProjectMember>()
+        // Project  Owner (1:N)
+        builder.Entity<Project>()
+            .HasOne<User>()
+            .WithMany(u => u.OwnedProjects)
+            .HasForeignKey(p => p.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ProjectMember composite key
+        builder.Entity<ProjectMember>()
             .HasKey(pm => new { pm.ProjectId, pm.UserId });
 
-        // TaskItem <-> Project (1:N)
-        modelBuilder.Entity<TaskItem>()
-            .HasOne(t => t.Project)
-            .WithMany(p => p.Tasks)
+        // Task  Project (1:N)
+        builder.Entity<TaskItem>()
+            .HasOne(p => p.Project)
+            .WithMany(t => t.Tasks)
             .HasForeignKey(t => t.ProjectId);
 
-        // TaskAssignment history
-        modelBuilder.Entity<TaskAssignment>()
+        // Task  User (AssignedTo)
+        builder.Entity<TaskItem>()
+            .HasOne(t => t.AssignedToUser)
+            .WithMany(u => u.AssignedTasks)
+            .HasForeignKey(t => t.AssignedToUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // TaskAssignment ↔ Task ↔ User
+        builder.Entity<TaskAssignment>()
             .HasOne(ta => ta.TaskItem)
             .WithMany(t => t.Assignments)
             .HasForeignKey(ta => ta.TaskItemId);
 
-        // TaskItem <-> Tag (M:N via TaskTag)
-        modelBuilder.Entity<TaskTag>()
+        builder.Entity<TaskAssignment>()
+            .HasOne(ta => ta.AssignedToUser)
+            .WithMany(u => u.TaskAssignments)
+            .HasForeignKey(ta => ta.AssignedToUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TaskAssignment>()
+            .HasOne(ta => ta.AssignedByUser)
+            .WithMany()
+            .HasForeignKey(ta => ta.AssignedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // TaskTag composite key
+        builder.Entity<TaskTag>()
             .HasKey(tt => new { tt.TaskItemId, tt.TagId });
+
+        //  Seed Roles
+        builder.Entity<Role>().HasData(
+            new Role { Id = Guid.NewGuid(), Name = "Admin" },
+            new Role { Id = Guid.NewGuid(), Name = "Manager" },
+            new Role { Id = Guid.NewGuid(), Name = "Developer" }
+        );
     }
 }
