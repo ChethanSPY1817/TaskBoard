@@ -5,7 +5,10 @@ public class User
     public Guid Id { get; set; }
     public string Email { get; set; } = default!;
     public string PasswordHash { get; set; } = default!;
-    public string Role { get; set; } = "Developer"; // Default role
+
+    // 🔹 Foreign Key to Role
+    public Guid RoleId { get; set; }
+    public Role Role { get; set; } = default!;
 
     // Navigation
     public UserProfile? Profile { get; set; }
