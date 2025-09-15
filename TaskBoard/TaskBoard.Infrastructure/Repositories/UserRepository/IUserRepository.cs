@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaskBoard.Domain.Entities;
+﻿using TaskBoard.Domain.Entities;
 
 namespace TaskBoard.Infrastructure.Repositories.UserRepository
 {
@@ -11,8 +6,8 @@ namespace TaskBoard.Infrastructure.Repositories.UserRepository
     {
         Task<List<User>> GetAllAsync();
         Task<User?> GetByIdAsync(Guid id);
-        Task AddAsync(User user);
-        Task UpdateAsync(User user);
+        Task AddAsync(User user, string plainPassword);
+        Task UpdateAsync(User user, string? newPlainPassword = null);
         Task DeleteAsync(User user);
     }
 }

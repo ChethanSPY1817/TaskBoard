@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using TaskBoard.Application.DTOs.Projects;
 using TaskBoard.Domain.Entities;
 using TaskBoard.Infrastructure.Data;
@@ -10,6 +11,7 @@ namespace TaskBoard.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // All endpoints require authentication
     public class ProjectsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -21,32 +23,35 @@ namespace TaskBoard.API.Controllers
             _mapper = mapper;
         }
 
-        // ---------------------- GET: api/Projects ----------------------
-        // Returns all projects
-        // Accessible by all roles including Developer
+        // ---------------- GET: api/Projects ----------------
         [HttpGet]
-        [Authorize(Roles = "Admin,Manager,Developer,SuperAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> GetProjects()
         {
-            var projects = await _context.Projects
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            IQueryable<Project> query = _context.Projects
                 .Include(p => p.Owner)
                 .Include(p => p.Members)
-                .AsNoTracking()
-                .ToListAsync();
+                .AsNoTracking();
 
-            // Map entity list to DTO list
+            if (userRole == "Developer")
+            {
+                // Developers see only projects they are part of
+                query = query.Where(p => p.Members.Any(m => m.UserId == userId));
+            }
+
+            var projects = await query.ToListAsync();
             return Ok(_mapper.Map<List<ProjectDto>>(projects));
         }
 
-        // ---------------------- GET: api/Projects/{id} ----------------------
-        // Returns a specific project by ID
+        // ---------------- GET: api/Projects/{id} ----------------
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Manager,Developer,SuperAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetProject(Guid id)
         {
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
             var project = await _context.Projects
                 .Include(p => p.Owner)
                 .Include(p => p.Members)
@@ -54,21 +59,31 @@ namespace TaskBoard.API.Controllers
 
             if (project == null) return NotFound();
 
+            if (userRole == "Developer" && !project.Members.Any(m => m.UserId == userId))
+                return Forbid();
+
             return Ok(_mapper.Map<ProjectDto>(project));
         }
 
-        // ---------------------- POST: api/Projects ----------------------
-        // Creates a new project
-        // Only Admin & Manager roles
+        // ---------------- POST: api/Projects ----------------
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager,SuperAdmin")]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [Authorize(Roles = "Manager,Admin,SuperAdmin")]
         public async Task<IActionResult> CreateProject(CreateProjectDto dto)
         {
-            // Map DTO to entity
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+
+            // Managers can only create projects with themselves as owner
+            if (userRole == "Manager")
+                dto.OwnerId = userId;
+
+            // Validate Owner exists
+            var ownerExists = await _context.Users.AnyAsync(u => u.Id == dto.OwnerId);
+            if (!ownerExists)
+                return BadRequest("Owner user does not exist.");
+
             var project = _mapper.Map<Project>(dto);
-            project.Id = Guid.NewGuid(); // Ensure a new GUID
+            project.Id = Guid.NewGuid();
 
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
@@ -76,32 +91,22 @@ namespace TaskBoard.API.Controllers
             return CreatedAtAction(nameof(GetProject), new { id = project.Id }, _mapper.Map<ProjectDto>(project));
         }
 
-        // ---------------------- PUT: api/Projects/{id} ----------------------
-        // Updates an existing project
-        // Only Admin & Manager roles
+        // ---------------- PUT: api/Projects/{id} ----------------
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Manager,SuperAdmin")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [Authorize(Roles = "Manager,Admin,SuperAdmin")]
         public async Task<IActionResult> UpdateProject(Guid id, UpdateProjectDto dto)
         {
             var project = await _context.Projects.FindAsync(id);
             if (project == null) return NotFound();
 
-            // Map the updated DTO values to the entity
             _mapper.Map(dto, project);
-
             await _context.SaveChangesAsync();
             return NoContent();
         }
 
-        // ---------------------- DELETE: api/Projects/{id} ----------------------
-        // Deletes a project
-        // Only Admin & SuperAdmin roles
+        // ---------------- DELETE: api/Projects/{id} ----------------
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,SuperAdmin")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteProject(Guid id)
         {
             var project = await _context.Projects.FindAsync(id);
@@ -109,7 +114,6 @@ namespace TaskBoard.API.Controllers
 
             _context.Projects.Remove(project);
             await _context.SaveChangesAsync();
-
             return NoContent();
         }
     }

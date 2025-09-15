@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
-
-namespace TaskBoard.Infrastructure.Data.Migrations
+namespace TaskBoard.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -83,7 +81,7 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                 columns: table => new
                 {
                     UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    FullName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Phone = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Address = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
@@ -207,16 +205,6 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                         principalTable: "Tasks",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.InsertData(
-                table: "Roles",
-                columns: new[] { "Id", "Name" },
-                values: new object[,]
-                {
-                    { new Guid("10000000-0000-0000-0000-000000000001"), "Admin" },
-                    { new Guid("10000000-0000-0000-0000-000000000002"), "Manager" },
-                    { new Guid("10000000-0000-0000-0000-000000000003"), "Developer" }
                 });
 
             migrationBuilder.CreateIndex(

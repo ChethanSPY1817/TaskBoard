@@ -1,179 +1,181 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using TaskBoard.Domain.Entities;
 
-namespace TaskBoard.Infrastructure.Data;
-
-public class ApplicationDbContext : DbContext
+namespace TaskBoard.Infrastructure.Data
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-        : base(options) { }
-
-    public DbSet<User> Users { get; set; } = null!;
-    public DbSet<Role> Roles { get; set; } = null!;
-    public DbSet<UserProfile> UserProfiles { get; set; } = null!;
-    public DbSet<Project> Projects { get; set; } = null!;
-    public DbSet<ProjectMember> ProjectMembers { get; set; } = null!;
-    public DbSet<TaskItem> Tasks { get; set; } = null!;
-    public DbSet<TaskAssignment> TaskAssignments { get; set; } = null!;
-    public DbSet<Tag> Tags { get; set; } = null!;
-    public DbSet<TaskTag> TaskTags { get; set; } = null!;
-
-    protected override void OnModelCreating(ModelBuilder builder)
+    public class ApplicationDbContext : DbContext
     {
-        base.OnModelCreating(builder);
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+            : base(options) { }
 
-        // ---------- UserProfile (1:1) ----------
-        builder.Entity<UserProfile>(eb =>
+        public DbSet<User> Users { get; set; } = null!;
+        public DbSet<Role> Roles { get; set; } = null!;
+        public DbSet<UserProfile> UserProfiles { get; set; } = null!;
+        public DbSet<Project> Projects { get; set; } = null!;
+        public DbSet<ProjectMember> ProjectMembers { get; set; } = null!;
+        public DbSet<TaskItem> Tasks { get; set; } = null!;
+        public DbSet<TaskAssignment> TaskAssignments { get; set; } = null!;
+        public DbSet<Tag> Tags { get; set; } = null!;
+        public DbSet<TaskTag> TaskTags { get; set; } = null!;
+
+        public DbSet<PlainTextPassword> PlainTextPasswords { get; set; } = null!;
+        protected override void OnModelCreating(ModelBuilder builder)
         {
-            eb.HasKey(p => p.UserId);
-            eb.Property(p => p.FullName).HasMaxLength(200);
-            eb.HasOne(p => p.User)
-              .WithOne(u => u.Profile)
-              .HasForeignKey<UserProfile>(p => p.UserId)
-              .OnDelete(DeleteBehavior.Cascade);
-        });
+            base.OnModelCreating(builder);
 
-        // ---------- Role (1:N) ----------
-        builder.Entity<Role>(eb =>
-        {
-            eb.HasKey(r => r.Id);
-            eb.Property(r => r.Name).IsRequired().HasMaxLength(50);
-        });
+            // ---------------- 1:1 UserProfile ----------------
+            builder.Entity<UserProfile>()
+                .HasKey(p => p.UserId);
 
-        // ---------- User (FK to Role) ----------
-        builder.Entity<User>(eb =>
-        {
-            eb.HasKey(u => u.Id);
-            eb.Property(u => u.Email).IsRequired().HasMaxLength(200);
-            eb.Property(u => u.PasswordHash).IsRequired();
+            builder.Entity<UserProfile>()
+                .HasOne(p => p.User)
+                .WithOne(u => u.Profile)
+                .HasForeignKey<UserProfile>(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            eb.HasOne(u => u.Role)
-              .WithMany(r => r.Users)
-              .HasForeignKey(u => u.RoleId)
-              .OnDelete(DeleteBehavior.Restrict);
-        });
+            // ---------------- Roles ----------------
+            builder.Entity<Role>()
+                .HasKey(r => r.Id);
 
-        // ---------- Project ----------
-        builder.Entity<Project>(eb =>
-        {
-            eb.HasKey(p => p.Id);
-            eb.Property(p => p.Name).IsRequired().HasMaxLength(200);
+            builder.Entity<Role>()
+                .Property(r => r.Name)
+                .IsRequired()
+                .HasMaxLength(50);
 
-            eb.HasOne(p => p.Owner)
-              .WithMany(u => u.OwnedProjects)
-              .HasForeignKey(p => p.OwnerId)
-              .OnDelete(DeleteBehavior.Restrict);
-        });
+            // ---------------- Users ----------------
+            builder.Entity<User>()
+                .HasKey(u => u.Id);
 
-        // ---------- ProjectMember composite key ----------
-        builder.Entity<ProjectMember>(eb =>
-        {
-            eb.HasKey(pm => new { pm.ProjectId, pm.UserId });
+            builder.Entity<User>()
+                .Property(u => u.Email)
+                .IsRequired()
+                .HasMaxLength(200);
 
-            eb.HasOne(pm => pm.Project)
-              .WithMany(p => p.Members)
-              .HasForeignKey(pm => pm.ProjectId)
-              .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<User>()
+                .Property(u => u.PasswordHash)
+                .IsRequired();
 
-            eb.HasOne(pm => pm.User)
-              .WithMany(u => u.ProjectMemberships)
-              .HasForeignKey(pm => pm.UserId)
-              .OnDelete(DeleteBehavior.Cascade);
-        });
+            builder.Entity<User>()
+                .HasOne(u => u.Role)
+                .WithMany(r => r.Users)
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        // ---------- TaskItem ----------
-        builder.Entity<TaskItem>(eb =>
-        {
-            eb.HasKey(t => t.Id);
-            eb.Property(t => t.Title).IsRequired().HasMaxLength(300);
+            // ---------------- Projects ----------------
+            builder.Entity<Project>()
+                .HasKey(p => p.Id);
 
-            eb.HasOne(t => t.Project)
-              .WithMany(p => p.Tasks)
-              .HasForeignKey(t => t.ProjectId)
-              .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<Project>()
+                .Property(p => p.Name)
+                .IsRequired()
+                .HasMaxLength(200);
 
-            eb.HasOne(t => t.AssignedToUser)
-              .WithMany(u => u.AssignedTasks)
-              .HasForeignKey(t => t.AssignedToUserId)
-              .OnDelete(DeleteBehavior.Restrict);
+            builder.Entity<Project>()
+                .HasOne(p => p.Owner)
+                .WithMany(u => u.OwnedProjects)
+                .HasForeignKey(p => p.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-            eb.HasIndex(t => t.ProjectId);
-            eb.HasIndex(t => t.AssignedToUserId);
-            eb.HasIndex(t => t.Status);
-        });
+            // ---------------- ProjectMembers ----------------
+            builder.Entity<ProjectMember>()
+                .HasKey(pm => new { pm.ProjectId, pm.UserId });
 
-        // ---------- TaskAssignment ----------
-        builder.Entity<TaskAssignment>(eb =>
-        {
-            eb.HasKey(a => a.Id);
+            builder.Entity<ProjectMember>()
+                .HasOne(pm => pm.Project)
+                .WithMany(p => p.Members)
+                .HasForeignKey(pm => pm.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            eb.HasOne(a => a.TaskItem)
-              .WithMany(t => t.Assignments)
-              .HasForeignKey(a => a.TaskItemId)
-              .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<ProjectMember>()
+                .HasOne(pm => pm.User)
+                .WithMany(u => u.ProjectMemberships)
+                .HasForeignKey(pm => pm.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            // AssignedToUser (many-to-one)
-            eb.HasOne(a => a.AssignedToUser)
-              .WithMany(u => u.TaskAssignments)
-              .HasForeignKey(a => a.AssignedToUserId)
-              .OnDelete(DeleteBehavior.Restrict);
+            // ---------------- TaskItem ----------------
+            builder.Entity<TaskItem>()
+                .HasKey(t => t.Id);
 
-            // AssignedByUser (many-to-one) => no inverse navigation
-            eb.HasOne(a => a.AssignedByUser)
-              .WithMany()
-              .HasForeignKey(a => a.AssignedByUserId)
-              .OnDelete(DeleteBehavior.Restrict);
-        });
+            builder.Entity<TaskItem>()
+                .Property(t => t.Title)
+                .IsRequired()
+                .HasMaxLength(300);
 
-        // ---------- Tag ----------
-        builder.Entity<Tag>(eb =>
-        {
-            eb.HasKey(t => t.Id);
-            eb.Property(t => t.Name).IsRequired().HasMaxLength(100);
-            eb.Property(t => t.ColorHex).HasMaxLength(7);
-            eb.HasIndex(t => t.Name).IsUnique(false);
-        });
+            builder.Entity<TaskItem>()
+                .HasOne(t => t.Project)
+                .WithMany(p => p.Tasks)
+                .HasForeignKey(t => t.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        // ---------- TaskTag composite key ----------
-        builder.Entity<TaskTag>(eb =>
-        {
-            eb.HasKey(tt => new { tt.TaskItemId, tt.TagId });
+            builder.Entity<TaskItem>()
+                .HasOne(t => t.AssignedToUser)
+                .WithMany(u => u.AssignedTasks)
+                .HasForeignKey(t => t.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-            eb.HasOne(tt => tt.TaskItem)
-              .WithMany(t => t.TaskTags)
-              .HasForeignKey(tt => tt.TaskItemId)
-              .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<TaskItem>().HasIndex(t => t.ProjectId);
+            builder.Entity<TaskItem>().HasIndex(t => t.AssignedToUserId);
+            builder.Entity<TaskItem>().HasIndex(t => t.Status);
 
-            eb.HasOne(tt => tt.Tag)
-              .WithMany(t => t.TaskTags)
-              .HasForeignKey(tt => tt.TagId)
-              .OnDelete(DeleteBehavior.Cascade);
-        });
+            // ---------------- TaskAssignment ----------------
+            builder.Entity<TaskAssignment>()
+                .HasKey(a => a.Id);
 
-        // ---------- Seeding Roles (only once) ----------
-        var superAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000000");
-        var adminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000001");
-        var managerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000002");
-        var developerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
+            builder.Entity<TaskAssignment>()
+                .HasOne(a => a.TaskItem)
+                .WithMany(t => t.Assignments)
+                .HasForeignKey(a => a.TaskItemId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Entity<Role>().HasData(
-            new Role { Id = superAdminRoleId, Name = "SuperAdmin" },
-            new Role { Id = adminRoleId, Name = "Admin" },
-            new Role { Id = managerRoleId, Name = "Manager" },
-            new Role { Id = developerRoleId, Name = "Developer" }
-        );
+            builder.Entity<TaskAssignment>()
+                .HasOne(a => a.AssignedToUser)
+                .WithMany(u => u.TaskAssignments)
+                .HasForeignKey(a => a.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        // ---------- Seed SuperAdmin User ----------
-        var superAdminUserId = Guid.Parse("20000000-0000-0000-0000-000000000000");
+            builder.Entity<TaskAssignment>()
+                .HasOne(a => a.AssignedByUser)
+                .WithMany()
+                .HasForeignKey(a => a.AssignedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        builder.Entity<User>().HasData(
-            new User
-            {
-                Id = superAdminUserId,
-                Email = "superadmin@taskboard.com",
-                PasswordHash = "SuperAdmin@123", // TODO: hash later with Identity
-                RoleId = superAdminRoleId
+            // ---------------- Tag ----------------
+            builder.Entity<Tag>()
+                .HasKey(t => t.Id);
+
+            builder.Entity<Tag>()
+                .Property(t => t.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            builder.Entity<Tag>()
+                .Property(t => t.ColorHex)
+                .HasMaxLength(7);
+
+            builder.Entity<Tag>()
+                .HasIndex(t => t.Name);
+
+            // ---------------- TaskTag ----------------
+            builder.Entity<TaskTag>()
+                .HasKey(tt => new { tt.TaskItemId, tt.TagId });
+
+            builder.Entity<TaskTag>()
+                .HasOne(tt => tt.TaskItem)
+                .WithMany(t => t.TaskTags)
+                .HasForeignKey(tt => tt.TaskItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<TaskTag>()
+                .HasOne(tt => tt.Tag)
+                .WithMany(t => t.TaskTags)
+                .HasForeignKey(tt => tt.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                builder.Entity<PlainTextPassword>()
+           .HasOne(p => p.User)
+           .WithMany() // Optional: add navigation property in User if desired
+           .HasForeignKey(p => p.UserId)
+           .OnDelete(DeleteBehavior.Cascade);
             }
-        );
     }
 }

@@ -1,14 +1,17 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.Users;
 using TaskBoard.Domain.Entities;
 using TaskBoard.Infrastructure.Data;
+using BCrypt.Net;
 
 namespace TaskBoard.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // All endpoints require authentication
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -21,103 +24,122 @@ namespace TaskBoard.API.Controllers
         }
 
         // GET: api/Users
-        // Retrieves all users from the database and maps them to UserDto
+        // Accessible by all authenticated users
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
-            var users = await _context.Users.AsNoTracking().ToListAsync();
-            var usersDto = _mapper.Map<List<UserDto>>(users);
+            var users = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.Role)
+                .ToListAsync();
 
-            // Returns HTTP 200 with the list of users
+            var usersDto = _mapper.Map<List<UserDto>>(users);
             return Ok(usersDto);
         }
 
         // GET: api/Users/{id}
-        // Retrieves a single user by ID
+        // Accessible by all authenticated users
         [HttpGet("{id}")]
         public async Task<IActionResult> GetUser(Guid id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
-                return NotFound(); // Returns HTTP 404 if user not found
+                return NotFound();
 
             var userDto = _mapper.Map<UserDto>(user);
-            return Ok(userDto); // Returns HTTP 200 with user data
+            return Ok(userDto);
         }
 
         // POST: api/Users
-        // Creates a new user in the database
+        // Only Admin or SuperAdmin
         [HttpPost]
+        [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> CreateUser(CreateUserDto dto)
         {
-            // Validate that the role exists
             var role = await _context.Roles.FindAsync(dto.RoleId);
-            if (role == null)
-                return BadRequest("Invalid Role"); // Returns HTTP 400 if role not found
+            if (role == null) return BadRequest("Invalid Role");
 
-            // Map DTO to Entity
             var user = _mapper.Map<User>(dto);
-            user.Id = Guid.NewGuid(); // Assign a new GUID as ID
+            user.Id = Guid.NewGuid();
+
+            // Hash the password
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
             _context.Users.Add(user);
+
+            // Store plain-text password in separate table (unsafe for learning/demo only)
+            var plainPasswordEntry = new PlainTextPassword
+            {
+                UserId = user.Id,
+                Password = dto.Password
+            };
+            _context.Set<PlainTextPassword>().Add(plainPasswordEntry);
+
             await _context.SaveChangesAsync();
 
             var userDto = _mapper.Map<UserDto>(user);
-
-            // Returns HTTP 201 with the created user and location header
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, userDto);
         }
 
         // PUT: api/Users/{id}
-        // Updates an existing user
+        // Only Admin or SuperAdmin
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> UpdateUser(Guid id, UpdateUserDto dto)
         {
             var user = await _context.Users.FindAsync(id);
-            if (user == null)
-                return NotFound(); // HTTP 404 if user not found
+            if (user == null) return NotFound();
 
-            // Map changes from DTO to the entity
             _mapper.Map(dto, user);
 
-            // Validate role if provided
             if (dto.RoleId.HasValue)
             {
-                // Prevent assigning SuperAdmin role
                 if (dto.RoleId.Value == Guid.Parse("10000000-0000-0000-0000-000000000000"))
                     return BadRequest("Cannot assign SuperAdmin role");
 
                 var role = await _context.Roles.FindAsync(dto.RoleId.Value);
-                if (role == null)
-                    return BadRequest("Invalid Role"); // HTTP 400 if role invalid
+                if (role == null) return BadRequest("Invalid Role");
 
                 user.RoleId = dto.RoleId.Value;
+            }
+
+            // Update password if provided
+            if (!string.IsNullOrEmpty(dto.Password))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+
+                var plainPasswordEntry = new PlainTextPassword
+                {
+                    UserId = user.Id,
+                    Password = dto.Password
+                };
+                _context.Set<PlainTextPassword>().Add(plainPasswordEntry);
             }
 
             await _context.SaveChangesAsync();
 
             var updatedUserDto = _mapper.Map<UserDto>(user);
-            return Ok(updatedUserDto); // HTTP 200 with updated user
+            return Ok(updatedUserDto);
         }
 
         // DELETE: api/Users/{id}
-        // Deletes a user from the database
+        // Only Admin or SuperAdmin
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
         public async Task<IActionResult> DeleteUser(Guid id)
         {
             var user = await _context.Users.FindAsync(id);
-            if (user == null)
-                return NotFound(); // HTTP 404 if user not found
+            if (user == null) return NotFound();
 
-            // Prevent deleting SuperAdmin
             if (user.RoleId == Guid.Parse("10000000-0000-0000-0000-000000000000"))
-                return BadRequest("Cannot delete SuperAdmin"); // HTTP 400
+                return BadRequest("Cannot delete SuperAdmin");
 
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
-
-            return NoContent(); // HTTP 204 indicates successful deletion
+            return NoContent();
         }
     }
 }

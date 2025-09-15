@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.TaskAssignments;
@@ -9,6 +10,7 @@ namespace TaskBoard.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // All endpoints require authentication
 public class TaskAssignmentsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -40,6 +42,7 @@ public class TaskAssignmentsController : ControllerBase
 
     // POST: api/TaskAssignments
     [HttpPost]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<ActionResult<TaskAssignmentDto>> CreateAssignment(CreateTaskAssignmentDto dto)
     {
         var assignment = _mapper.Map<TaskAssignment>(dto);
@@ -54,6 +57,7 @@ public class TaskAssignmentsController : ControllerBase
 
     // PUT: api/TaskAssignments/{id}
     [HttpPut("{id}")]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<IActionResult> UpdateAssignment(Guid id, UpdateTaskAssignmentDto dto)
     {
         var assignment = await _context.TaskAssignments.FindAsync(id);
@@ -67,6 +71,7 @@ public class TaskAssignmentsController : ControllerBase
 
     // DELETE: api/TaskAssignments/{id}
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<IActionResult> DeleteAssignment(Guid id)
     {
         var assignment = await _context.TaskAssignments.FindAsync(id);

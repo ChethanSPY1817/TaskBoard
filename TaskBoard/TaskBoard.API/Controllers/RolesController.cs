@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskBoard.Application.DTOs.Roles;
 using TaskBoard.Domain.Entities;
@@ -8,6 +9,7 @@ namespace TaskBoard.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "SuperAdmin")] // Only SuperAdmin can access any endpoint
 public class RolesController : ControllerBase
 {
     private readonly IRoleRepository _roleRepository;

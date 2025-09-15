@@ -1,65 +1,100 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using TaskBoard.Application.Services.Auth;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using TaskBoard.Application.DTOs.Auth;
+using TaskBoard.Domain.Entities;
+using TaskBoard.Infrastructure.Data;
+using BCrypt.Net;
 
-namespace TaskBoard.Api.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    private readonly ApplicationDbContext _context;
+    private readonly IConfiguration _configuration;
+
+    public AuthController(ApplicationDbContext context, IConfiguration configuration)
     {
-        private readonly UserManager<IdentityUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
-        private readonly IJwtTokenService _jwtService;
+        _context = context;
+        _configuration = configuration;
+    }
 
-        public AuthController(UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IJwtTokenService jwtService)
+    // ---------------- Register (SuperAdmin only) ----------------
+    [HttpPost("register")]
+    [Authorize(Roles = "SuperAdmin")]
+    public async Task<IActionResult> Register(RegisterUserDto dto)
+    {
+        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+            return BadRequest("Email already exists.");
+
+        var role = await _context.Roles.FindAsync(dto.RoleId);
+        if (role == null)
+            return BadRequest("Invalid RoleId.");
+
+        var user = new User
         {
-            _userManager = userManager;
-            _roleManager = roleManager;
-            _jwtService = jwtService;
-        }
+            Id = Guid.NewGuid(),
+            Email = dto.Email,
+            RoleId = dto.RoleId,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password) // <-- BCrypt
+        };
 
-        // DTOs
-        public record RegisterDto(string Email, string Password, string FullName, string? Role = "Developer");
-        public record LoginDto(string Email, string Password);
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterDto dto)
+        return Ok(new { user.Id, user.Email, Role = role.Name });
+    }
+
+    // ---------------- Login ----------------
+    [HttpPost("login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Login(LoginDto dto)
+    {
+        var user = await _context.Users.Include(u => u.Role)
+                                       .FirstOrDefaultAsync(u => u.Email == dto.Email);
+        if (user == null)
+            return Unauthorized("Invalid credentials.");
+
+        // Verify password using BCrypt
+        bool isValid = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
+        if (!isValid)
+            return Unauthorized("Invalid credentials.");
+
+        // Generate JWT
+        var token = GenerateJwtToken(user);
+
+        return Ok(new { token });
+    }
+
+    // ---------------- JWT Token Generation ----------------
+    private string GenerateJwtToken(User user)
+    {
+        var jwtKey = _configuration["Jwt:Key"];
+        var jwtIssuer = _configuration["Jwt:Issuer"];
+        var jwtAudience = _configuration["Jwt:Audience"];
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!));
+
+        var claims = new List<Claim>
         {
-            var user = new IdentityUser { UserName = dto.Email, Email = dto.Email };
-            var result = await _userManager.CreateAsync(user, dto.Password);
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role!.Name)
+        };
 
-            if (!result.Succeeded)
-                return BadRequest(result.Errors);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            // Assign role (default Developer)
-            var role = dto.Role ?? "Developer";
-            if (await _roleManager.RoleExistsAsync(role))
-                await _userManager.AddToRoleAsync(user, role);
+        var token = new JwtSecurityToken(
+            issuer: jwtIssuer,
+            audience: jwtAudience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(3),
+            signingCredentials: creds
+        );
 
-            return Ok(new { Message = "User registered successfully" });
-        }
-
-        [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDto dto)
-        {
-            var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null) return Unauthorized("Invalid email or password");
-
-            var valid = await _userManager.CheckPasswordAsync(user, dto.Password);
-            if (!valid) return Unauthorized("Invalid email or password");
-
-            var token = await _jwtService.GenerateTokenAsync(user);
-            return Ok(new { Token = token });
-        }
-
-        [Authorize(Roles = "Admin")]
-        [HttpGet("users")]
-        public IActionResult GetUsers()
-        {
-            var users = _userManager.Users.Select(u => new { u.Id, u.Email }).ToList();
-            return Ok(users);
-        }
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

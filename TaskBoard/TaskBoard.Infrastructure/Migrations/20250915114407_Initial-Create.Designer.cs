@@ -3,17 +3,20 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskBoard.Infrastructure.Data;
 
 #nullable disable
 
-namespace TaskBoard.Infrastructure.Data.Migrations
+namespace TaskBoard.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250915114407_Initial-Create")]
+    partial class InitialCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -75,28 +78,6 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Roles");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000000"),
-                            Name = "SuperAdmin"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            Name = "Admin"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
-                            Name = "Manager"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
-                            Name = "Developer"
-                        });
                 });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.Tag", b =>
@@ -229,15 +210,6 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("Users");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("20000000-0000-0000-0000-000000000000"),
-                            Email = "superadmin@taskboard.com",
-                            PasswordHash = "SuperAdmin@123",
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000000")
-                        });
                 });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.UserProfile", b =>
@@ -250,8 +222,7 @@ namespace TaskBoard.Infrastructure.Data.Migrations
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");

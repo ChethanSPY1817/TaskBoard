@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskBoard.Application.DTOs.TaskItems;
 using TaskBoard.Domain.Entities;
@@ -8,6 +9,7 @@ namespace TaskBoard.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize] // All endpoints require authentication
     public class TaskItemsController : ControllerBase
     {
         private readonly ITaskItemRepository _repository;
@@ -19,9 +21,7 @@ namespace TaskBoard.API.Controllers
             _mapper = mapper;
         }
 
-        /// <summary>
-        /// Get all task items
-        /// </summary>
+        // GET: api/TaskItems
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TaskItemDto>>> GetAll()
         {
@@ -29,9 +29,7 @@ namespace TaskBoard.API.Controllers
             return Ok(_mapper.Map<IEnumerable<TaskItemDto>>(tasks));
         }
 
-        /// <summary>
-        /// Get task by Id
-        /// </summary>
+        // GET: api/TaskItems/{id}
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItemDto>> GetById(Guid id)
         {
@@ -41,10 +39,9 @@ namespace TaskBoard.API.Controllers
             return Ok(_mapper.Map<TaskItemDto>(task));
         }
 
-        /// <summary>
-        /// Create new task
-        /// </summary>
+        // POST: api/TaskItems
         [HttpPost]
+        [Authorize(Roles = "Manager,SuperAdmin")]
         public async Task<ActionResult<TaskItemDto>> Create(CreateTaskItemDto dto)
         {
             var task = _mapper.Map<TaskItem>(dto);
@@ -55,10 +52,9 @@ namespace TaskBoard.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = task.Id }, _mapper.Map<TaskItemDto>(task));
         }
 
-        /// <summary>
-        /// Update existing task
-        /// </summary>
+        // PUT: api/TaskItems/{id}
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager,SuperAdmin")]
         public async Task<IActionResult> Update(Guid id, UpdateTaskItemDto dto)
         {
             var existingTask = await _repository.GetByIdAsync(id);
@@ -70,10 +66,9 @@ namespace TaskBoard.API.Controllers
             return NoContent();
         }
 
-        /// <summary>
-        /// Delete task by Id
-        /// </summary>
+        // DELETE: api/TaskItems/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager,SuperAdmin")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var task = await _repository.GetByIdAsync(id);

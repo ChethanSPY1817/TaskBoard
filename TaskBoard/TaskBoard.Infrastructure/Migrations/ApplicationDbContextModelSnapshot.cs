@@ -3,20 +3,17 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskBoard.Infrastructure.Data;
 
 #nullable disable
 
-namespace TaskBoard.Infrastructure.Data.Migrations
+namespace TaskBoard.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250915061309_All Roles Added")]
-    partial class AllRolesAdded
+    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -24,6 +21,29 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("TaskBoard.Domain.Entities.PlainTextPassword", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Password")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PlainTextPasswords");
+                });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.Project", b =>
                 {
@@ -78,28 +98,6 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Roles");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000000"),
-                            Name = "SuperAdmin"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            Name = "Admin"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
-                            Name = "Manager"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
-                            Name = "Developer"
-                        });
                 });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.Tag", b =>
@@ -232,15 +230,6 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("Users");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("20000000-0000-0000-0000-000000000000"),
-                            Email = "superadmin@taskboard.com",
-                            PasswordHash = "SuperAdmin@123",
-                            RoleId = new Guid("10000000-0000-0000-0000-000000000000")
-                        });
                 });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.UserProfile", b =>
@@ -253,8 +242,7 @@ namespace TaskBoard.Infrastructure.Data.Migrations
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
@@ -262,6 +250,17 @@ namespace TaskBoard.Infrastructure.Data.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("UserProfiles");
+                });
+
+            modelBuilder.Entity("TaskBoard.Domain.Entities.PlainTextPassword", b =>
+                {
+                    b.HasOne("TaskBoard.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TaskBoard.Domain.Entities.Project", b =>

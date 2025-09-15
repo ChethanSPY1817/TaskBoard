@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using TaskBoard.Application.DTOs.Tags;
 using TaskBoard.Domain.Entities;
 using TaskBoard.Infrastructure.Data;
@@ -9,6 +11,7 @@ namespace TaskBoard.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class TagsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -40,6 +43,7 @@ public class TagsController : ControllerBase
 
     // POST: api/Tags
     [HttpPost]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<ActionResult<TagDto>> CreateTag(CreateTagDto dto)
     {
         var tag = _mapper.Map<Tag>(dto);
@@ -53,6 +57,7 @@ public class TagsController : ControllerBase
 
     // PUT: api/Tags/{id}
     [HttpPut("{id}")]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<IActionResult> UpdateTag(Guid id, UpdateTagDto dto)
     {
         var tag = await _context.Tags.FindAsync(id);
@@ -66,6 +71,7 @@ public class TagsController : ControllerBase
 
     // DELETE: api/Tags/{id}
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Manager,SuperAdmin")]
     public async Task<IActionResult> DeleteTag(Guid id)
     {
         var tag = await _context.Tags.FindAsync(id);

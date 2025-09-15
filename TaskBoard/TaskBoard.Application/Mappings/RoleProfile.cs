@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TaskBoard.Application.DTOs.ProjectMembers;
+using TaskBoard.Application.DTOs.Projects; // <-- Add this
 using TaskBoard.Application.DTOs.Roles;
 using TaskBoard.Application.DTOs.Tags;
 using TaskBoard.Application.DTOs.TaskAssignments;
@@ -38,10 +39,10 @@ namespace TaskBoard.Application.Mappings
             CreateMap<CreateUserProfileDto, UserProfile>();
             CreateMap<UpdateUserProfileDto, UserProfile>();
 
-            // ---------------------- Role mappings ----------------------
-            CreateMap<Role, RoleDto>().ReverseMap();
-            CreateMap<CreateRoleDto, Role>();
-            CreateMap<UpdateRoleDto, Role>();
+            // ---------------------- Project mappings ----------------------
+            CreateMap<Project, ProjectDto>().ReverseMap();
+            CreateMap<CreateProjectDto, Project>();
+            CreateMap<UpdateProjectDto, Project>();
 
             // ---------------------- ProjectMember mappings ----------------------
             CreateMap<ProjectMember, ProjectMemberDto>().ReverseMap();
@@ -61,7 +62,6 @@ namespace TaskBoard.Application.Mappings
             // ---------------------- TaskItems mappings ----------------------
             // Entity -> DTO
             CreateMap<TaskItem, TaskItemDto>();
-
             // DTO -> Entity
             CreateMap<CreateTaskItemDto, TaskItem>();
             CreateMap<UpdateTaskItemDto, TaskItem>();
@@ -69,7 +69,6 @@ namespace TaskBoard.Application.Mappings
             // ---------------------- TaskTags mappings ----------------------
             // Entity → DTO
             CreateMap<TaskTag, TaskTagDto>();
-
             // DTO → Entity
             CreateMap<CreateTaskTagDto, TaskTag>();
         }
