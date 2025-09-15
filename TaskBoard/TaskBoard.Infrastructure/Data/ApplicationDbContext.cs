@@ -22,10 +22,10 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(builder);
 
-        // ---------- UserProfile (1:1) where UserId is PK ----------
+        // ---------- UserProfile (1:1) ----------
         builder.Entity<UserProfile>(eb =>
         {
-            eb.HasKey(p => p.UserId); // UserId is primary key
+            eb.HasKey(p => p.UserId);
             eb.Property(p => p.FullName).HasMaxLength(200);
             eb.HasOne(p => p.User)
               .WithOne(u => u.Profile)
@@ -148,15 +148,32 @@ public class ApplicationDbContext : DbContext
               .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // optional: seed roles with stable GUIDs (useful later)
+        // ---------- Seeding Roles ----------
+        var superAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000000");
         var adminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         var managerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000002");
         var developerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000003");
 
         builder.Entity<Role>().HasData(
+            new Role { Id = superAdminRoleId, Name = "SuperAdmin" },
             new Role { Id = adminRoleId, Name = "Admin" },
             new Role { Id = managerRoleId, Name = "Manager" },
             new Role { Id = developerRoleId, Name = "Developer" }
         );
+
+        // ---------- Seed SuperAdmin User ----------
+        var superAdminUserId = Guid.Parse("20000000-0000-0000-0000-000000000000");
+
+        builder.Entity<User>().HasData(
+            new User
+            {
+                Id = superAdminUserId,
+                Email = "superadmin@taskboard.com",
+                PasswordHash = "SuperAdmin@123", // TODO: hash later with Identity
+                RoleId = superAdminRoleId
+            }
+        );
+
+
     }
 }
