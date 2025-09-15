@@ -1,134 +1,141 @@
-﻿using BCrypt.Net;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Org.BouncyCastle.Crypto.Generators;
 using TaskBoard.Application.DTOs.Users;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
 using TaskBoard.Infrastructure.Data;
 
-namespace TaskBoard.API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class UsersController : ControllerBase
+namespace TaskBoard.API.Controllers
 {
-    private readonly ApplicationDbContext _context;
-    public UsersController(ApplicationDbContext context) => _context = context;
-
-    // GET: api/Users
-    [HttpGet]
-    [Authorize(Roles = "SuperAdmin,Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UsersController : ControllerBase
     {
-        var users = await _context.Users
-            .AsNoTracking()
-            .Select(u => new UserDto { Id = u.Id, Email = u.Email, RoleId = u.RoleId })
-            .ToListAsync();
+        private readonly ApplicationDbContext _context;
+        public UsersController(ApplicationDbContext context) => _context = context;
 
-        return Ok(users);
-    }
-
-    // GET: api/Users/{id}
-    [HttpGet("{id}")]
-    [Authorize(Roles = "SuperAdmin,Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<UserDto>> GetUser(Guid id)
-    {
-        var user = await _context.Users
-            .AsNoTracking()
-            .Where(u => u.Id == id)
-            .Select(u => new UserDto { Id = u.Id, Email = u.Email, RoleId = u.RoleId })
-            .FirstOrDefaultAsync();
-
-        if (user == null) return NotFound();
-        return Ok(user);
-    }
-
-    // POST: api/Users
-    [HttpPost]
-    [Authorize(Roles = "SuperAdmin")] // Only SuperAdmin can create users
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto dto)
-    {
-        // Prevent creating another SuperAdmin
-        var role = await _context.Roles.FindAsync(dto.RoleId);
-        if (role == null || role.Name == "SuperAdmin")
-            return BadRequest("Invalid role.");
-
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-            return BadRequest("Email already exists.");
-
-        var user = new User
+        // GET: api/Users
+        [HttpGet]
+        //[Authorize(Roles = "SuperAdmin,Admin")]
+        public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
         {
-            Id = Guid.NewGuid(),
-            Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password), // hash password
-            RoleId = dto.RoleId
-        };
+            var users = await _context.Users
+                .AsNoTracking()
+                .Select(u => new UserDto
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    RoleId = u.RoleId
+                })
+                .ToListAsync();
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetUser), new { id = user.Id }, new UserDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            RoleId = user.RoleId
-        });
-    }
-
-    // PUT: api/Users/{id}
-    [HttpPut("{id}")]
-    [Authorize(Roles = "SuperAdmin")] // Only SuperAdmin can update users including roles
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateUser(Guid id, UpdateUserDto dto)
-    {
-        var user = await _context.Users.FindAsync(id);
-        if (user == null) return NotFound();
-
-        // Prevent updating SuperAdmin role accidentally
-        if (dto.RoleId.HasValue)
-        {
-            var role = await _context.Roles.FindAsync(dto.RoleId.Value);
-            if (role == null || role.Name == "SuperAdmin")
-                return BadRequest("Invalid role.");
-            user.RoleId = dto.RoleId.Value;
+            return Ok(users);
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.Email))
-            user.Email = dto.Email;
+        // GET: api/Users/{id}
+        [HttpGet("{id}")]
+        //[Authorize(Roles = "SuperAdmin,Admin")]
+        public async Task<ActionResult<UserDto>> GetUser(Guid id)
+        {
+            var user = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Id == id)
+                .Select(u => new UserDto
+                {
+                    Id = u.Id,
+                    Email = u.Email,
+                    RoleId = u.RoleId
+                })
+                .FirstOrDefaultAsync();
 
-        if (!string.IsNullOrWhiteSpace(dto.Password))
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+            if (user == null) return NotFound();
+            return Ok(user);
+        }
 
-        await _context.SaveChangesAsync();
-        return NoContent();
-    }
+        // POST: api/Users
+        [HttpPost]
+        //[Authorize(Roles = "SuperAdmin")]
+        public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto dto)
+        {
+            // Check role exists
+            var role = await _context.Roles.FindAsync(dto.RoleId);
+            if (role == null) return BadRequest("Invalid Role");
 
-    // DELETE: api/Users/{id}
-    [HttpDelete("{id}")]
-    [Authorize(Roles = "SuperAdmin")] // Only SuperAdmin can delete users
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteUser(Guid id)
-    {
-        var user = await _context.Users.FindAsync(id);
-        if (user == null) return NotFound();
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = dto.Email,
+                PasswordHash = dto.Password, // TODO: hash using Identity or custom hashing
+                RoleId = dto.RoleId
+            };
 
-        // Prevent deleting SuperAdmin
-        var role = await _context.Roles.FindAsync(user.RoleId);
-        if (role?.Name == "SuperAdmin")
-            return BadRequest("Cannot delete SuperAdmin.");
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
 
-        _context.Users.Remove(user);
-        await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email,
+                RoleId = user.RoleId
+            });
+        }
 
-        return NoContent();
+        // PUT: api/Users/{id}
+        [HttpPut("{id}")]
+        //[Authorize(Roles = "SuperAdmin")]
+        public async Task<ActionResult<UserDto>> UpdateUser(Guid id, UpdateUserDto dto)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            // Update email
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+                user.Email = dto.Email;
+
+            // Update password if provided
+            if (!string.IsNullOrWhiteSpace(dto.Password))
+                user.PasswordHash = dto.Password; // later replace with hashed password
+
+            // Update role if provided
+            if (dto.RoleId.HasValue)
+            {
+                // SuperAdmin role cannot be assigned
+                if (dto.RoleId.Value == Guid.Parse("10000000-0000-0000-0000-000000000000"))
+                    return BadRequest("Cannot assign SuperAdmin role");
+
+                var role = await _context.Roles.FindAsync(dto.RoleId.Value);
+                if (role == null) return BadRequest("Invalid Role");
+
+                user.RoleId = dto.RoleId.Value;
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Return updated user
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email,
+                RoleId = user.RoleId
+            });
+        }
+
+
+        // DELETE: api/Users/{id}
+        [HttpDelete("{id}")]
+        //[Authorize(Roles = "SuperAdmin")]
+        public async Task<IActionResult> DeleteUser(Guid id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            // Prevent deleting SuperAdmin
+            if (user.RoleId == Guid.Parse("10000000-0000-0000-0000-000000000000"))
+                return BadRequest("Cannot delete SuperAdmin");
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
     }
 }

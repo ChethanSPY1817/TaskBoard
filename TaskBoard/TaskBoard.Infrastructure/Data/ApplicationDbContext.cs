@@ -112,11 +112,13 @@ public class ApplicationDbContext : DbContext
               .HasForeignKey(a => a.TaskItemId)
               .OnDelete(DeleteBehavior.Cascade);
 
+            // AssignedToUser (many-to-one)
             eb.HasOne(a => a.AssignedToUser)
               .WithMany(u => u.TaskAssignments)
               .HasForeignKey(a => a.AssignedToUserId)
               .OnDelete(DeleteBehavior.Restrict);
 
+            // AssignedByUser (many-to-one) => no inverse navigation
             eb.HasOne(a => a.AssignedByUser)
               .WithMany()
               .HasForeignKey(a => a.AssignedByUserId)
@@ -148,7 +150,7 @@ public class ApplicationDbContext : DbContext
               .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ---------- Seeding Roles ----------
+        // ---------- Seeding Roles (only once) ----------
         var superAdminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000000");
         var adminRoleId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         var managerRoleId = Guid.Parse("10000000-0000-0000-0000-000000000002");
@@ -173,7 +175,5 @@ public class ApplicationDbContext : DbContext
                 RoleId = superAdminRoleId
             }
         );
-
-
     }
 }

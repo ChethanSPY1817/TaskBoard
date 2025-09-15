@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TaskBoard.Domain.Entities;
+using TaskStatus = TaskBoard.Domain.Entities.TaskStatus;
 
 namespace TaskBoard.Application.DTOs.TaskItems
 {
@@ -13,7 +15,7 @@ namespace TaskBoard.Application.DTOs.TaskItems
         public string? Description { get; set; }
         public Guid ProjectId { get; set; }
         public Guid? AssignedToUserId { get; set; }
-        public string Status { get; set; } = "New";
-        public string Priority { get; set; } = "Medium";
+        public TaskStatus Status { get; set; }
+        public TaskPriority Priority { get; set; }
     }
 }
