@@ -1,10 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using TaskBoard.Application.DTOs.TaskItems;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
-using TaskBoard.Infrastructure.Data;
-
+using TaskBoard.Infrastructure.Repositories.TaskItemRepository;
 
 namespace TaskBoard.API.Controllers
 {
@@ -12,114 +10,76 @@ namespace TaskBoard.API.Controllers
     [Route("api/[controller]")]
     public class TaskItemsController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ITaskItemRepository _repository;
+        private readonly IMapper _mapper;
 
-        public TaskItemsController(ApplicationDbContext context)
+        public TaskItemsController(ITaskItemRepository repository, IMapper mapper)
         {
-            _context = context;
+            _repository = repository;
+            _mapper = mapper;
         }
 
+        /// <summary>
+        /// Get all task items
+        /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TaskItemDto>>> GetAll()
         {
-            var tasks = await _context.Tasks
-                .AsNoTracking()
-                .Select(t => new TaskItemDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    ProjectId = t.ProjectId,
-                    AssignedToUserId = t.AssignedToUserId,
-                    Status = t.Status,
-                    Priority = t.Priority
-                })
-                .ToListAsync();
-
-            return Ok(tasks);
+            var tasks = await _repository.GetAllAsync();
+            return Ok(_mapper.Map<IEnumerable<TaskItemDto>>(tasks));
         }
 
+        /// <summary>
+        /// Get task by Id
+        /// </summary>
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItemDto>> GetById(Guid id)
         {
-            var task = await _context.Tasks
-                .AsNoTracking()
-                .Where(t => t.Id == id)
-                .Select(t => new TaskItemDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    ProjectId = t.ProjectId,
-                    AssignedToUserId = t.AssignedToUserId,
-                    Status = t.Status,
-                    Priority = t.Priority
-                })
-                .FirstOrDefaultAsync();
-
+            var task = await _repository.GetByIdAsync(id);
             if (task == null) return NotFound();
-            return Ok(task);
+
+            return Ok(_mapper.Map<TaskItemDto>(task));
         }
 
+        /// <summary>
+        /// Create new task
+        /// </summary>
         [HttpPost]
         public async Task<ActionResult<TaskItemDto>> Create(CreateTaskItemDto dto)
         {
-            var projectExists = await _context.Projects.AnyAsync(p => p.Id == dto.ProjectId);
-            var userExists = await _context.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
+            var task = _mapper.Map<TaskItem>(dto);
+            task.Id = Guid.NewGuid(); // Generate new ID
 
-            if (!projectExists) return BadRequest("Project does not exist.");
-            if (!userExists) return BadRequest("Assigned user does not exist.");
+            await _repository.AddAsync(task);
 
-            var task = new TaskItem
-            {
-                Id = Guid.NewGuid(),
-                Title = dto.Title,
-                Description = dto.Description,
-                ProjectId = dto.ProjectId,
-                AssignedToUserId = dto.AssignedToUserId,
-                Status = dto.Status,
-                Priority = dto.Priority
-            };
-
-            _context.Tasks.Add(task);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetById), new { id = task.Id }, new TaskItemDto
-            {
-                Id = task.Id,
-                Title = task.Title,
-                Description = task.Description,
-                ProjectId = task.ProjectId,
-                AssignedToUserId = task.AssignedToUserId,
-                Status = task.Status,
-                Priority = task.Priority
-            });
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, _mapper.Map<TaskItemDto>(task));
         }
 
+        /// <summary>
+        /// Update existing task
+        /// </summary>
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, UpdateTaskItemDto dto)
         {
-            var task = await _context.Tasks.FindAsync(id);
-            if (task == null) return NotFound();
+            var existingTask = await _repository.GetByIdAsync(id);
+            if (existingTask == null) return NotFound();
 
-            if (dto.Title != null) task.Title = dto.Title;
-            if (dto.Description != null) task.Description = dto.Description;
-            if (dto.AssignedToUserId.HasValue) task.AssignedToUserId = dto.AssignedToUserId.Value;
-            if (dto.Status.HasValue) task.Status = dto.Status.Value;
-            if (dto.Priority.HasValue) task.Priority = dto.Priority.Value;
+            _mapper.Map(dto, existingTask); // Map only non-null properties
+            await _repository.UpdateAsync(existingTask);
 
-            await _context.SaveChangesAsync();
             return NoContent();
         }
 
+        /// <summary>
+        /// Delete task by Id
+        /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var task = await _context.Tasks.FindAsync(id);
+            var task = await _repository.GetByIdAsync(id);
             if (task == null) return NotFound();
 
-            _context.Tasks.Remove(task);
-            await _context.SaveChangesAsync();
+            await _repository.DeleteAsync(task);
             return NoContent();
         }
     }

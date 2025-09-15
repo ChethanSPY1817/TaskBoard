@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.Projects;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
 using TaskBoard.Infrastructure.Data;
 
 namespace TaskBoard.API.Controllers
@@ -13,87 +13,72 @@ namespace TaskBoard.API.Controllers
     public class ProjectsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
 
-        public ProjectsController(ApplicationDbContext context)
+        public ProjectsController(ApplicationDbContext context, IMapper mapper)
         {
             _context = context;
+            _mapper = mapper;
         }
 
-        // GET: api/Projects
-        // Admin, Manager can see all, Developer will later be restricted
+        // ---------------------- GET: api/Projects ----------------------
+        // Returns all projects
+        // Accessible by all roles including Developer
         [HttpGet]
         [Authorize(Roles = "Admin,Manager,Developer,SuperAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<ProjectDto>>> GetProjects()
+        public async Task<IActionResult> GetProjects()
         {
             var projects = await _context.Projects
+                .Include(p => p.Owner)
+                .Include(p => p.Members)
                 .AsNoTracking()
-                .Select(p => new ProjectDto
-                {
-                    Id = p.Id,
-                    Name = p.Name,
-                    Description = p.Description,
-                    OwnerId = p.OwnerId
-                })
                 .ToListAsync();
 
-            return Ok(projects);
+            // Map entity list to DTO list
+            return Ok(_mapper.Map<List<ProjectDto>>(projects));
         }
 
-        // GET: api/Projects/{id}
+        // ---------------------- GET: api/Projects/{id} ----------------------
+        // Returns a specific project by ID
         [HttpGet("{id}")]
         [Authorize(Roles = "Admin,Manager,Developer,SuperAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<ProjectDto>> GetProject(Guid id)
+        public async Task<IActionResult> GetProject(Guid id)
         {
             var project = await _context.Projects
-                .AsNoTracking()
-                .Where(p => p.Id == id)
-                .Select(p => new ProjectDto
-                {
-                    Id = p.Id,
-                    Name = p.Name,
-                    Description = p.Description,
-                    OwnerId = p.OwnerId
-                })
-                .FirstOrDefaultAsync();
+                .Include(p => p.Owner)
+                .Include(p => p.Members)
+                .FirstOrDefaultAsync(p => p.Id == id);
 
             if (project == null) return NotFound();
 
-            return Ok(project);
+            return Ok(_mapper.Map<ProjectDto>(project));
         }
 
-        // POST: api/Projects
-        // Only Admin & Manager can create
+        // ---------------------- POST: api/Projects ----------------------
+        // Creates a new project
+        // Only Admin & Manager roles
         [HttpPost]
         [Authorize(Roles = "Admin,Manager,SuperAdmin")]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<ProjectDto>> CreateProject(CreateProjectDto dto)
+        public async Task<IActionResult> CreateProject(CreateProjectDto dto)
         {
-            var project = new Project
-            {
-                Id = Guid.NewGuid(),
-                Name = dto.Name,
-                Description = dto.Description,
-                OwnerId = dto.OwnerId
-            };
+            // Map DTO to entity
+            var project = _mapper.Map<Project>(dto);
+            project.Id = Guid.NewGuid(); // Ensure a new GUID
 
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetProject), new { id = project.Id }, new ProjectDto
-            {
-                Id = project.Id,
-                Name = project.Name,
-                Description = project.Description,
-                OwnerId = project.OwnerId
-            });
+            return CreatedAtAction(nameof(GetProject), new { id = project.Id }, _mapper.Map<ProjectDto>(project));
         }
 
-        // PUT: api/Projects/{id}
-        // Only Admin & Manager can update
+        // ---------------------- PUT: api/Projects/{id} ----------------------
+        // Updates an existing project
+        // Only Admin & Manager roles
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,Manager,SuperAdmin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -103,15 +88,16 @@ namespace TaskBoard.API.Controllers
             var project = await _context.Projects.FindAsync(id);
             if (project == null) return NotFound();
 
-            project.Name = dto.Name;
-            project.Description = dto.Description;
+            // Map the updated DTO values to the entity
+            _mapper.Map(dto, project);
 
             await _context.SaveChangesAsync();
             return NoContent();
         }
 
-        // DELETE: api/Projects/{id}
-        // Only Admin can delete
+        // ---------------------- DELETE: api/Projects/{id} ----------------------
+        // Deletes a project
+        // Only Admin & SuperAdmin roles
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,SuperAdmin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]

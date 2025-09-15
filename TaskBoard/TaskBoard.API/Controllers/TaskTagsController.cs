@@ -1,66 +1,63 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using TaskBoard.Application.DTOs.TaskTags;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
-using TaskBoard.Infrastructure.Data;
+using TaskBoard.Infrastructure.Repositories.TaskTagRepository;
 
-namespace TaskBoard.API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class TaskTagsController : ControllerBase
+namespace TaskBoard.API.Controllers
 {
-    private readonly ApplicationDbContext _context;
-    public TaskTagsController(ApplicationDbContext context) => _context = context;
-
-    // GET: api/TaskTags
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<TaskTagDto>>> GetTaskTags()
+    [ApiController]
+    [Route("api/[controller]")]
+    public class TaskTagsController : ControllerBase
     {
-        var taskTags = await _context.TaskTags
-            .AsNoTracking()
-            .Select(tt => new TaskTagDto
-            {
-                TaskItemId = tt.TaskItemId,
-                TagId = tt.TagId
-            })
-            .ToListAsync();
+        private readonly ITaskTagRepository _repository;
+        private readonly IMapper _mapper;
 
-        return Ok(taskTags);
-    }
-
-    // POST: api/TaskTags
-    [HttpPost]
-    public async Task<ActionResult<TaskTagDto>> AddTaskTag(CreateTaskTagDto dto)
-    {
-        var exists = await _context.TaskTags
-            .AnyAsync(tt => tt.TaskItemId == dto.TaskItemId && tt.TagId == dto.TagId);
-
-        if (exists) return BadRequest("Tag is already assigned to this task.");
-
-        var taskTag = new TaskTag
+        public TaskTagsController(ITaskTagRepository repository, IMapper mapper)
         {
-            TaskItemId = dto.TaskItemId,
-            TagId = dto.TagId
-        };
+            _repository = repository;
+            _mapper = mapper;
+        }
 
-        _context.TaskTags.Add(taskTag);
-        await _context.SaveChangesAsync();
+        /// <summary>
+        /// Get all task-tag assignments
+        /// </summary>
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<TaskTagDto>>> GetAll()
+        {
+            var taskTags = await _repository.GetAllAsync();
+            return Ok(_mapper.Map<IEnumerable<TaskTagDto>>(taskTags));
+        }
 
-        return CreatedAtAction(nameof(GetTaskTags), new { taskItemId = taskTag.TaskItemId, tagId = taskTag.TagId },
-            new TaskTagDto { TaskItemId = taskTag.TaskItemId, TagId = taskTag.TagId });
-    }
+        /// <summary>
+        /// Assign a tag to a task
+        /// </summary>
+        [HttpPost]
+        public async Task<ActionResult<TaskTagDto>> Add(CreateTaskTagDto dto)
+        {
+            // Prevent duplicates
+            var existing = await _repository.GetByIdAsync(dto.TaskItemId, dto.TagId);
+            if (existing != null) return BadRequest("Tag is already assigned to this task.");
 
-    // DELETE: api/TaskTags
-    [HttpDelete]
-    public async Task<IActionResult> RemoveTaskTag(Guid taskItemId, Guid tagId)
-    {
-        var taskTag = await _context.TaskTags.FindAsync(taskItemId, tagId);
-        if (taskTag == null) return NotFound();
+            var taskTag = _mapper.Map<TaskTag>(dto);
+            await _repository.AddAsync(taskTag);
 
-        _context.TaskTags.Remove(taskTag);
-        await _context.SaveChangesAsync();
-        return NoContent();
+            return CreatedAtAction(nameof(GetAll),
+                new { taskItemId = taskTag.TaskItemId, tagId = taskTag.TagId },
+                _mapper.Map<TaskTagDto>(taskTag));
+        }
+
+        /// <summary>
+        /// Remove a tag from a task
+        /// </summary>
+        [HttpDelete]
+        public async Task<IActionResult> Remove(Guid taskItemId, Guid tagId)
+        {
+            var taskTag = await _repository.GetByIdAsync(taskItemId, tagId);
+            if (taskTag == null) return NotFound();
+
+            await _repository.DeleteAsync(taskTag);
+            return NoContent();
+        }
     }
 }

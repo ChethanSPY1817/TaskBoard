@@ -1,9 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using TaskBoard.Application.DTOs.Roles;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
-using TaskBoard.Infrastructure.Data;
+using TaskBoard.Infrastructure.Repositories.RoleRepository;
 
 namespace TaskBoard.API.Controllers;
 
@@ -11,76 +10,61 @@ namespace TaskBoard.API.Controllers;
 [Route("api/[controller]")]
 public class RolesController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    public RolesController(ApplicationDbContext context) => _context = context;
+    private readonly IRoleRepository _roleRepository;
+    private readonly IMapper _mapper;
 
-    // GET: api/Roles
+    public RolesController(IRoleRepository roleRepository, IMapper mapper)
+    {
+        _roleRepository = roleRepository;
+        _mapper = mapper;
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<RoleDto>>> GetRoles()
     {
-        var roles = await _context.Roles
-            .AsNoTracking()
-            .Select(r => new RoleDto { Id = r.Id, Name = r.Name })
-            .ToListAsync();
-
-        return Ok(roles);
+        var roles = await _roleRepository.GetAllAsync();
+        return Ok(_mapper.Map<IEnumerable<RoleDto>>(roles));
     }
 
-    // GET: api/Roles/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<RoleDto>> GetRole(Guid id)
     {
-        var role = await _context.Roles
-            .AsNoTracking()
-            .Where(r => r.Id == id)
-            .Select(r => new RoleDto { Id = r.Id, Name = r.Name })
-            .FirstOrDefaultAsync();
-
+        var role = await _roleRepository.GetByIdAsync(id);
         if (role == null) return NotFound();
-        return Ok(role);
+
+        return Ok(_mapper.Map<RoleDto>(role));
     }
 
-    // POST: api/Roles
     [HttpPost]
     public async Task<ActionResult<RoleDto>> CreateRole(CreateRoleDto dto)
     {
-        var role = new Role
-        {
-            Id = Guid.NewGuid(),
-            Name = dto.Name
-        };
+        var role = _mapper.Map<Role>(dto);
+        role.Id = Guid.NewGuid();
 
-        _context.Roles.Add(role);
-        await _context.SaveChangesAsync();
+        await _roleRepository.AddAsync(role);
 
-        return CreatedAtAction(nameof(GetRole), new { id = role.Id }, new RoleDto
-        {
-            Id = role.Id,
-            Name = role.Name
-        });
+        return CreatedAtAction(nameof(GetRole), new { id = role.Id }, _mapper.Map<RoleDto>(role));
     }
 
-    // PUT: api/Roles/{id}
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateRole(Guid id, UpdateRoleDto dto)
     {
-        var role = await _context.Roles.FindAsync(id);
+        var role = await _roleRepository.GetByIdAsync(id);
         if (role == null) return NotFound();
 
-        role.Name = dto.Name;
-        await _context.SaveChangesAsync();
+        _mapper.Map(dto, role); // Map update DTO onto existing entity
+        await _roleRepository.UpdateAsync(role);
+
         return NoContent();
     }
 
-    // DELETE: api/Roles/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRole(Guid id)
     {
-        var role = await _context.Roles.FindAsync(id);
+        var role = await _roleRepository.GetByIdAsync(id);
         if (role == null) return NotFound();
 
-        _context.Roles.Remove(role);
-        await _context.SaveChangesAsync();
+        await _roleRepository.DeleteAsync(role);
         return NoContent();
     }
 }

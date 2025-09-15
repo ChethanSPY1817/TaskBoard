@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.Tags;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
 using TaskBoard.Infrastructure.Data;
 
 namespace TaskBoard.API.Controllers;
@@ -12,62 +12,43 @@ namespace TaskBoard.API.Controllers;
 public class TagsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    public TagsController(ApplicationDbContext context) => _context = context;
+    private readonly IMapper _mapper;
+
+    public TagsController(ApplicationDbContext context, IMapper mapper)
+    {
+        _context = context;
+        _mapper = mapper;
+    }
 
     // GET: api/Tags
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TagDto>>> GetTags()
     {
-        var tags = await _context.Tags
-            .AsNoTracking()
-            .Select(t => new TagDto
-            {
-                Id = t.Id,
-                Name = t.Name,
-                ColorHex = t.ColorHex
-            }).ToListAsync();
-
-        return Ok(tags);
+        var tags = await _context.Tags.AsNoTracking().ToListAsync();
+        return Ok(_mapper.Map<List<TagDto>>(tags));
     }
 
     // GET: api/Tags/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<TagDto>> GetTag(Guid id)
     {
-        var tag = await _context.Tags
-            .AsNoTracking()
-            .Where(t => t.Id == id)
-            .Select(t => new TagDto
-            {
-                Id = t.Id,
-                Name = t.Name,
-                ColorHex = t.ColorHex
-            }).FirstOrDefaultAsync();
-
+        var tag = await _context.Tags.FindAsync(id);
         if (tag == null) return NotFound();
-        return Ok(tag);
+
+        return Ok(_mapper.Map<TagDto>(tag));
     }
 
     // POST: api/Tags
     [HttpPost]
     public async Task<ActionResult<TagDto>> CreateTag(CreateTagDto dto)
     {
-        var tag = new Tag
-        {
-            Id = Guid.NewGuid(),
-            Name = dto.Name,
-            ColorHex = dto.ColorHex
-        };
+        var tag = _mapper.Map<Tag>(dto);
+        tag.Id = Guid.NewGuid();
 
         _context.Tags.Add(tag);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetTag), new { id = tag.Id }, new TagDto
-        {
-            Id = tag.Id,
-            Name = tag.Name,
-            ColorHex = tag.ColorHex
-        });
+        return CreatedAtAction(nameof(GetTag), new { id = tag.Id }, _mapper.Map<TagDto>(tag));
     }
 
     // PUT: api/Tags/{id}
@@ -77,8 +58,7 @@ public class TagsController : ControllerBase
         var tag = await _context.Tags.FindAsync(id);
         if (tag == null) return NotFound();
 
-        tag.Name = dto.Name;
-        tag.ColorHex = dto.ColorHex;
+        _mapper.Map(dto, tag);
         await _context.SaveChangesAsync();
 
         return NoContent();

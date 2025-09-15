@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Infrastructure.Data;
-using TaskBoard.Infrastructure.Repositories;
 using TaskBoard.Infrastructure.Repositories.P;
 using TaskBoard.Infrastructure.Repositories.ProjectMemberRepository;
 using TaskBoard.Infrastructure.Repositories.ProjectRepository;
@@ -25,20 +24,24 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>()
     .AddDefaultTokenProviders();
 
 // ---------- Register Repositories ----------
-builder.Services.AddTransient<IUserRepository, UserRepository>();
-builder.Services.AddTransient<IRoleRepository, RoleRepository>();
-builder.Services.AddTransient<IProjectRepository, ProjectRepository>();
-builder.Services.AddTransient<IProjectMemberRepository, ProjectMemberRepository>();
-builder.Services.AddTransient<ITaskItemRepository, TaskItemRepository>();
-builder.Services.AddTransient<ITaskAssignmentRepository, TaskAssignmentRepository>();
-builder.Services.AddTransient<ITagRepository, TagRepository>();
-builder.Services.AddTransient<ITaskTagRepository, TaskTagRepository>();
-builder.Services.AddTransient<IUserProfileRepository, UserProfileRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<IProjectMemberRepository, ProjectMemberRepository>();
+builder.Services.AddScoped<ITaskItemRepository, TaskItemRepository>();
+builder.Services.AddScoped<ITaskAssignmentRepository, TaskAssignmentRepository>();
+builder.Services.AddScoped<ITagRepository, TagRepository>();
+builder.Services.AddScoped<ITaskTagRepository, TaskTagRepository>();
+builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 
 // ---------- Controllers + Swagger ----------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Add AutoMapper
+// Correct: pass the assembly containing your profiles
+builder.Services.AddAutoMapper(typeof(TaskBoard.Application.Mappings.RoleProfile).Assembly);
 
 var app = builder.Build();
 

@@ -1,109 +1,102 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.UserProfiles;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
 using TaskBoard.Infrastructure.Data;
 
-namespace TaskBoard.API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class UserProfilesController : ControllerBase
+namespace TaskBoard.API.Controllers
 {
-    private readonly ApplicationDbContext _context;
-    public UserProfilesController(ApplicationDbContext context) => _context = context;
-
-    // GET: api/UserProfiles
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetProfiles()
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UserProfilesController : ControllerBase
     {
-        var profiles = await _context.UserProfiles
-            .AsNoTracking()
-            .Select(p => new UserProfileDto
-            {
-                UserId = p.UserId,
-                FullName = p.FullName,
-                Phone = p.Phone,
-                Address = p.Address
-            }).ToListAsync();
+        private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
 
-        return Ok(profiles);
-    }
-
-    // GET: api/UserProfiles/{userId}
-    [HttpGet("{userId}")]
-    public async Task<ActionResult<UserProfileDto>> GetProfile(Guid userId)
-    {
-        var profile = await _context.UserProfiles
-            .AsNoTracking()
-            .Where(p => p.UserId == userId)
-            .Select(p => new UserProfileDto
-            {
-                UserId = p.UserId,
-                FullName = p.FullName,
-                Phone = p.Phone,
-                Address = p.Address
-            }).FirstOrDefaultAsync();
-
-        if (profile == null) return NotFound();
-        return Ok(profile);
-    }
-
-    // POST: api/UserProfiles
-    [HttpPost]
-    public async Task<ActionResult<UserProfileDto>> CreateProfile(CreateUserProfileDto dto)
-    {
-        var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
-        if (!userExists) return BadRequest("User does not exist.");
-
-        var exists = await _context.UserProfiles.AnyAsync(p => p.UserId == dto.UserId);
-        if (exists) return BadRequest("Profile already exists for this user.");
-
-        var profile = new UserProfile
+        public UserProfilesController(ApplicationDbContext context, IMapper mapper)
         {
-            UserId = dto.UserId,
-            FullName = dto.FullName,
-            Phone = dto.Phone,
-            Address = dto.Address
-        };
+            _context = context;
+            _mapper = mapper;
+        }
 
-        _context.UserProfiles.Add(profile);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetProfile), new { userId = profile.UserId }, new UserProfileDto
+        // GET: api/UserProfiles
+        // Returns all user profiles
+        [HttpGet]
+        public async Task<IActionResult> GetProfiles()
         {
-            UserId = profile.UserId,
-            FullName = profile.FullName,
-            Phone = profile.Phone,
-            Address = profile.Address
-        });
-    }
+            var profiles = await _context.UserProfiles
+                .AsNoTracking()
+                .ToListAsync();
 
-    // PUT: api/UserProfiles/{userId}
-    [HttpPut("{userId}")]
-    public async Task<IActionResult> UpdateProfile(Guid userId, UpdateUserProfileDto dto)
-    {
-        var profile = await _context.UserProfiles.FindAsync(userId);
-        if (profile == null) return NotFound();
+            var profilesDto = _mapper.Map<List<UserProfileDto>>(profiles);
+            return Ok(profilesDto); // HTTP 200
+        }
 
-        profile.FullName = dto.FullName ?? profile.FullName;
-        profile.Phone = dto.Phone ?? profile.Phone;
-        profile.Address = dto.Address ?? profile.Address;
+        // GET: api/UserProfiles/{userId}
+        // Returns a single user profile by user ID
+        [HttpGet("{userId}")]
+        public async Task<IActionResult> GetProfile(Guid userId)
+        {
+            var profile = await _context.UserProfiles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == userId);
 
-        await _context.SaveChangesAsync();
-        return NoContent();
-    }
+            if (profile == null) return NotFound(); // HTTP 404
 
-    // DELETE: api/UserProfiles/{userId}
-    [HttpDelete("{userId}")]
-    public async Task<IActionResult> DeleteProfile(Guid userId)
-    {
-        var profile = await _context.UserProfiles.FindAsync(userId);
-        if (profile == null) return NotFound();
+            var profileDto = _mapper.Map<UserProfileDto>(profile);
+            return Ok(profileDto); // HTTP 200
+        }
 
-        _context.UserProfiles.Remove(profile);
-        await _context.SaveChangesAsync();
-        return NoContent();
+        // POST: api/UserProfiles
+        // Creates a new user profile
+        [HttpPost]
+        public async Task<IActionResult> CreateProfile(CreateUserProfileDto dto)
+        {
+            // Validate that the user exists
+            var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
+            if (!userExists) return BadRequest("User does not exist."); // HTTP 400
+
+            // Prevent duplicate profiles
+            var exists = await _context.UserProfiles.AnyAsync(p => p.UserId == dto.UserId);
+            if (exists) return BadRequest("Profile already exists for this user."); // HTTP 400
+
+            // Map DTO to entity
+            var profile = _mapper.Map<UserProfile>(dto);
+
+            _context.UserProfiles.Add(profile);
+            await _context.SaveChangesAsync();
+
+            var profileDto = _mapper.Map<UserProfileDto>(profile);
+            return CreatedAtAction(nameof(GetProfile), new { userId = profile.UserId }, profileDto); // HTTP 201
+        }
+
+        // PUT: api/UserProfiles/{userId}
+        // Updates an existing user profile
+        [HttpPut("{userId}")]
+        public async Task<IActionResult> UpdateProfile(Guid userId, UpdateUserProfileDto dto)
+        {
+            var profile = await _context.UserProfiles.FindAsync(userId);
+            if (profile == null) return NotFound(); // HTTP 404
+
+            // Map updates from DTO
+            _mapper.Map(dto, profile);
+
+            await _context.SaveChangesAsync();
+            return NoContent(); // HTTP 204 indicates success with no content
+        }
+
+        // DELETE: api/UserProfiles/{userId}
+        // Deletes a user profile
+        [HttpDelete("{userId}")]
+        public async Task<IActionResult> DeleteProfile(Guid userId)
+        {
+            var profile = await _context.UserProfiles.FindAsync(userId);
+            if (profile == null) return NotFound(); // HTTP 404
+
+            _context.UserProfiles.Remove(profile);
+            await _context.SaveChangesAsync();
+            return NoContent(); // HTTP 204
+        }
     }
 }

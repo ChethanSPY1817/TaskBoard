@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskBoard.Application.DTOs.TaskAssignments;
 using TaskBoard.Domain.Entities;
-using TaskBoard.Infrastructure;
 using TaskBoard.Infrastructure.Data;
 
 namespace TaskBoard.API.Controllers;
@@ -12,76 +12,44 @@ namespace TaskBoard.API.Controllers;
 public class TaskAssignmentsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    public TaskAssignmentsController(ApplicationDbContext context) => _context = context;
+    private readonly IMapper _mapper;
+
+    public TaskAssignmentsController(ApplicationDbContext context, IMapper mapper)
+    {
+        _context = context;
+        _mapper = mapper;
+    }
 
     // GET: api/TaskAssignments
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TaskAssignmentDto>>> GetAssignments()
     {
-        var assignments = await _context.TaskAssignments
-            .AsNoTracking()
-            .Select(a => new TaskAssignmentDto
-            {
-                Id = a.Id,
-                TaskItemId = a.TaskItemId,
-                AssignedToUserId = a.AssignedToUserId,
-                AssignedByUserId = a.AssignedByUserId,
-                AssignedAt = a.AssignedAt,
-                Comment = a.Comment
-            })
-            .ToListAsync();
-
-        return Ok(assignments);
+        var assignments = await _context.TaskAssignments.AsNoTracking().ToListAsync();
+        return Ok(_mapper.Map<List<TaskAssignmentDto>>(assignments));
     }
 
     // GET: api/TaskAssignments/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<TaskAssignmentDto>> GetAssignment(Guid id)
     {
-        var assignment = await _context.TaskAssignments
-            .AsNoTracking()
-            .Where(a => a.Id == id)
-            .Select(a => new TaskAssignmentDto
-            {
-                Id = a.Id,
-                TaskItemId = a.TaskItemId,
-                AssignedToUserId = a.AssignedToUserId,
-                AssignedByUserId = a.AssignedByUserId,
-                AssignedAt = a.AssignedAt,
-                Comment = a.Comment
-            })
-            .FirstOrDefaultAsync();
-
+        var assignment = await _context.TaskAssignments.FindAsync(id);
         if (assignment == null) return NotFound();
-        return Ok(assignment);
+
+        return Ok(_mapper.Map<TaskAssignmentDto>(assignment));
     }
 
     // POST: api/TaskAssignments
     [HttpPost]
     public async Task<ActionResult<TaskAssignmentDto>> CreateAssignment(CreateTaskAssignmentDto dto)
     {
-        var assignment = new TaskAssignment
-        {
-            Id = Guid.NewGuid(),
-            TaskItemId = dto.TaskItemId,
-            AssignedToUserId = dto.AssignedToUserId,
-            AssignedByUserId = dto.AssignedByUserId,
-            Comment = dto.Comment,
-            AssignedAt = DateTime.UtcNow
-        };
+        var assignment = _mapper.Map<TaskAssignment>(dto);
+        assignment.Id = Guid.NewGuid();
+        assignment.AssignedAt = DateTime.UtcNow;
 
         _context.TaskAssignments.Add(assignment);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetAssignment), new { id = assignment.Id }, new TaskAssignmentDto
-        {
-            Id = assignment.Id,
-            TaskItemId = assignment.TaskItemId,
-            AssignedToUserId = assignment.AssignedToUserId,
-            AssignedByUserId = assignment.AssignedByUserId,
-            AssignedAt = assignment.AssignedAt,
-            Comment = assignment.Comment
-        });
+        return CreatedAtAction(nameof(GetAssignment), new { id = assignment.Id }, _mapper.Map<TaskAssignmentDto>(assignment));
     }
 
     // PUT: api/TaskAssignments/{id}
@@ -91,10 +59,9 @@ public class TaskAssignmentsController : ControllerBase
         var assignment = await _context.TaskAssignments.FindAsync(id);
         if (assignment == null) return NotFound();
 
-        assignment.AssignedToUserId = dto.AssignedToUserId ?? assignment.AssignedToUserId;
-        assignment.Comment = dto.Comment ?? assignment.Comment;
-
+        _mapper.Map(dto, assignment); // only updates mapped fields
         await _context.SaveChangesAsync();
+
         return NoContent();
     }
 
