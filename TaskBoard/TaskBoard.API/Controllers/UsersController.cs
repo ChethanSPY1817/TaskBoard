@@ -26,16 +26,53 @@ namespace TaskBoard.API.Controllers
         // GET: api/Users
         // Accessible by all authenticated users
         [HttpGet]
-        public async Task<IActionResult> GetUsers()
+        public async Task<IActionResult> GetUsers(
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 10,
+     [FromQuery] string? sortBy = null,
+     [FromQuery] string? sortOrder = "asc")
         {
-            var users = await _context.Users
+            var query = _context.Users
                 .AsNoTracking()
                 .Include(u => u.Role)
+                .AsQueryable();
+
+            // Sorting
+            if (!string.IsNullOrEmpty(sortBy))
+            {
+                query = sortBy.ToLower() switch
+                {
+                    "email" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                    "role" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(u => u.Role.Name) : query.OrderBy(u => u.Role.Name),
+                    _ => query.OrderBy(u => u.Email)
+                };
+            }
+            else
+            {
+                query = query.OrderBy(u => u.Email);
+            }
+
+            // Pagination
+            var totalItems = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+
+            var users = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             var usersDto = _mapper.Map<List<UserDto>>(users);
-            return Ok(usersDto);
+
+            return Ok(new
+            {
+                page,
+                pageSize,
+                totalPages,
+                totalItems,
+                items = usersDto
+            });
         }
+
 
         // GET: api/Users/{id}
         // Accessible by all authenticated users

@@ -30,19 +30,70 @@ namespace TaskBoard.API.Controllers
             Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         // GET: api/UserProfiles
+        //[HttpGet]
+        //public async Task<IActionResult> GetProfiles()
+        //{
+        //    if (!IsSuperAdmin())
+        //        return Forbid(); // Only SuperAdmin can view all profiles
+
+        //    var profiles = await _context.UserProfiles
+        //        .AsNoTracking()
+        //        .ToListAsync();
+
+        //    var profilesDto = _mapper.Map<List<UserProfileDto>>(profiles);
+        //    return Ok(profilesDto);
+        //}
+
+        // GET: api/UserProfiles
         [HttpGet]
-        public async Task<IActionResult> GetProfiles()
+        public async Task<IActionResult> GetProfiles(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortOrder = "asc")
         {
             if (!IsSuperAdmin())
                 return Forbid(); // Only SuperAdmin can view all profiles
 
-            var profiles = await _context.UserProfiles
-                .AsNoTracking()
+            var query = _context.UserProfiles.AsNoTracking();
+
+            // Sorting
+            if (!string.IsNullOrEmpty(sortBy))
+            {
+                query = sortBy.ToLower() switch
+                {
+                    "fullname" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(p => p.FullName) : query.OrderBy(p => p.FullName),
+                    "phone" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(p => p.Phone) : query.OrderBy(p => p.Phone),
+                    "address" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(p => p.Address) : query.OrderBy(p => p.Address),
+                    _ => query.OrderBy(p => p.FullName)
+                };
+            }
+            else
+            {
+                query = query.OrderBy(p => p.FullName);
+            }
+
+            // Pagination
+            var totalItems = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+
+            var profiles = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             var profilesDto = _mapper.Map<List<UserProfileDto>>(profiles);
-            return Ok(profilesDto);
+
+            return Ok(new
+            {
+                page,
+                pageSize,
+                totalPages,
+                totalItems,
+                items = profilesDto
+            });
         }
+
 
         // GET: api/UserProfiles/{userId}
         [HttpGet("{userId}")]
