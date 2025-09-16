@@ -2,7 +2,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Events;
+using Serilog.Filters;
+using System.Reflection;
 using System.Text;
+using TaskBoard.API.Controllers;
+using TaskBoard.API.Middleware;
 using TaskBoard.Application.Services.Auth;
 using TaskBoard.Domain.Entities;
 using TaskBoard.Infrastructure.Data;
@@ -74,6 +80,17 @@ builder.Services.AddScoped<ITagRepository, TagRepository>();
 builder.Services.AddScoped<ITaskTagRepository, TaskTagRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Hour) // auto creates folder
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+
+
 // ------------------- AutoMapper -------------------
 builder.Services.AddAutoMapper(typeof(TaskBoard.Application.Mappings.RoleProfile).Assembly);
 
@@ -132,6 +149,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Use middlewares
+app.UseGlobalExceptionHandling(); //  catch exceptions first
+app.UseRequestLogging();          //  log all requests
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
