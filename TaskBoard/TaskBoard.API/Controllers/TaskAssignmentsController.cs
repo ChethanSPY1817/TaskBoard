@@ -81,4 +81,29 @@ public class TaskAssignmentsController : ControllerBase
         await _context.SaveChangesAsync();
         return NoContent();
     }
+
+    // PATCH: api/TaskAssignments/{id}
+    // Only Manager or SuperAdmin
+    [HttpPatch("{id}")]
+    [Authorize(Roles = "Manager,SuperAdmin")]
+    public async Task<IActionResult> PatchAssignment(Guid id, [FromBody] UpdateTaskAssignmentDto dto)
+    {
+        if (dto == null) return BadRequest("dto is required");
+
+        var assignment = await _context.TaskAssignments.FindAsync(id);
+        if (assignment == null) return NotFound();
+
+        // Patch only non-null fields
+        if (dto.AssignedToUserId.HasValue)
+            assignment.AssignedToUserId = dto.AssignedToUserId.Value;
+
+        if (!string.IsNullOrWhiteSpace(dto.Comment))
+            assignment.Comment = dto.Comment;
+
+        await _context.SaveChangesAsync();
+
+        var assignmentDto = _mapper.Map<TaskAssignmentDto>(assignment);
+        return Ok(assignmentDto);
+    }
+
 }

@@ -118,5 +118,36 @@ namespace TaskBoard.API.Controllers
 
             return NoContent();
         }
+
+        // PATCH: api/UserProfiles/{userId}
+        // Only SuperAdmin or the user themselves
+        [HttpPatch("{userId}")]
+        public async Task<IActionResult> PatchProfile(Guid userId, [FromBody] UpdateUserProfileDto dto)
+        {
+            if (dto == null) return BadRequest("dto is required");
+
+            // Only SuperAdmin or the user themselves can patch
+            if (!IsSuperAdmin() && GetCurrentUserId() != userId)
+                return Forbid();
+
+            var profile = await _context.UserProfiles.FindAsync(userId);
+            if (profile == null) return NotFound();
+
+            // Update only non-null/non-empty properties
+            if (!string.IsNullOrEmpty(dto.FullName))
+                profile.FullName = dto.FullName;
+
+            if (!string.IsNullOrEmpty(dto.Phone))
+                profile.Phone = dto.Phone;
+
+            if (!string.IsNullOrEmpty(dto.Address))
+                profile.Address = dto.Address;
+
+            await _context.SaveChangesAsync();
+
+            var updatedDto = _mapper.Map<UserProfileDto>(profile);
+            return Ok(updatedDto);
+        }
+
     }
 }

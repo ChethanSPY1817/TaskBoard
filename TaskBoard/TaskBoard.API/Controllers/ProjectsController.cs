@@ -116,5 +116,37 @@ namespace TaskBoard.API.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        // PATCH: api/Projects/{id}
+        // Only Manager, Admin, or SuperAdmin
+        [HttpPatch("{id}")]
+        [Authorize(Roles = "Manager,Admin,SuperAdmin")]
+        public async Task<IActionResult> PatchProject(Guid id, [FromBody] UpdateProjectDto dto)
+        {
+            if (dto == null) return BadRequest("dto is required");
+
+            var project = await _context.Projects.FindAsync(id);
+            if (project == null) return NotFound();
+
+            // Only Manager, Admin, SuperAdmin can patch
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+
+            if (userRole == "Manager" && project.OwnerId != userId)
+                return Forbid(); // Managers can only modify their own projects
+
+            // Patch only non-null / non-empty fields
+            if (!string.IsNullOrWhiteSpace(dto.Name))
+                project.Name = dto.Name;
+
+            if (!string.IsNullOrWhiteSpace(dto.Description))
+                project.Description = dto.Description;
+
+            await _context.SaveChangesAsync();
+
+            var projectDto = _mapper.Map<ProjectDto>(project);
+            return Ok(projectDto);
+        }
+
     }
 }

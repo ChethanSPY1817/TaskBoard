@@ -56,5 +56,30 @@ namespace TaskBoard.API.Controllers
             await _repository.DeleteAsync(taskTag);
             return NoContent();
         }
+
+        // PATCH: api/TaskTags
+        // Only Manager or SuperAdmin
+        [HttpPatch]
+        [Authorize(Roles = "Manager,SuperAdmin")]
+        public async Task<IActionResult> Patch([FromQuery] Guid taskItemId, [FromQuery] Guid tagId, [FromBody] CreateTaskTagDto dto)
+        {
+            if (dto == null) return BadRequest("dto is required");
+
+            var taskTag = await _repository.GetByIdAsync(taskItemId, tagId);
+            if (taskTag == null) return NotFound();
+
+            // Update only if new values are provided
+            if (dto.TaskItemId != Guid.Empty && dto.TaskItemId != taskTag.TaskItemId)
+                taskTag.TaskItemId = dto.TaskItemId;
+
+            if (dto.TagId != Guid.Empty && dto.TagId != taskTag.TagId)
+                taskTag.TagId = dto.TagId;
+
+            await _repository.UpdateAsync(taskTag); // Make sure your repository supports UpdateAsync
+
+            var updatedDto = _mapper.Map<TaskTagDto>(taskTag);
+            return Ok(updatedDto);
+        }
+
     }
 }

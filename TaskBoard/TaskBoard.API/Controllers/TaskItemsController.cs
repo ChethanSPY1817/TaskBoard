@@ -77,5 +77,38 @@ namespace TaskBoard.API.Controllers
             await _repository.DeleteAsync(task);
             return NoContent();
         }
+
+        // PATCH: api/TaskItems/{id}
+        // Only Manager or SuperAdmin
+        [HttpPatch("{id}")]
+        [Authorize(Roles = "Manager,SuperAdmin")]
+        public async Task<IActionResult> PatchTaskItem(Guid id, [FromBody] UpdateTaskItemDto dto)
+        {
+            if (dto == null) return BadRequest();
+
+            var task = await _repository.GetByIdAsync(id);
+            if (task == null) return NotFound();
+
+            // Update only provided fields
+            if (!string.IsNullOrEmpty(dto.Title))
+                task.Title = dto.Title;
+
+            if (!string.IsNullOrEmpty(dto.Description))
+                task.Description = dto.Description;
+
+            if (dto.AssignedToUserId.HasValue)
+                task.AssignedToUserId = dto.AssignedToUserId.Value;
+
+            if (dto.Status.HasValue)
+                task.Status = dto.Status.Value;
+
+            if (dto.Priority.HasValue)
+                task.Priority = dto.Priority.Value;
+
+            await _repository.UpdateAsync(task);
+
+            return Ok(_mapper.Map<TaskItemDto>(task));
+        }
+
     }
 }

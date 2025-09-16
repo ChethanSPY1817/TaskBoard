@@ -141,5 +141,51 @@ namespace TaskBoard.API.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        // PATCH: api/Users/{id}
+        // Only Admin or SuperAdmin
+        [HttpPatch("{id}")]
+        [Authorize(Roles = "Admin,SuperAdmin")]
+        public async Task<IActionResult> PatchUser(Guid id, [FromBody] UpdateUserDto dto)
+        {
+            if (dto == null) return BadRequest();
+
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+
+            // Update only non-null / non-empty fields
+            if (!string.IsNullOrEmpty(dto.Email)) user.Email = dto.Email;
+
+            if (!string.IsNullOrEmpty(dto.Password))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+
+                // Store plain-text password (for learning/demo only)
+                var plainPasswordEntry = new PlainTextPassword
+                {
+                    UserId = user.Id,
+                    Password = dto.Password
+                };
+                _context.Set<PlainTextPassword>().Add(plainPasswordEntry);
+            }
+
+            if (dto.RoleId.HasValue)
+            {
+                if (dto.RoleId.Value == Guid.Parse("10000000-0000-0000-0000-000000000000"))
+                    return BadRequest("Cannot assign SuperAdmin role");
+
+                var role = await _context.Roles.FindAsync(dto.RoleId.Value);
+                if (role == null) return BadRequest("Invalid Role");
+
+                user.RoleId = dto.RoleId.Value;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var updatedUserDto = _mapper.Map<UserDto>(user);
+            return Ok(updatedUserDto);
+        }
+
+
     }
 }
